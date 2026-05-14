@@ -10,14 +10,17 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
         .drop-zone--over { border-color: #3b82f6; background-color: #eff6ff; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .combo-active { border-color: #3b82f6; ring: 2px; ring-color: #3b82f6; }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-gray-50 min-h-screen pb-32">
 
     <div class="max-w-7xl mx-auto px-4 py-8">
         <header class="mb-10 text-center">
             <h1 class="text-4xl font-bold text-gray-900 mb-2">Catálogo de Productos</h1>
-            <p class="text-gray-600">Visualiza SKU, Nombre, Precio, Stock y Categorías de tu inventario.</p>
+            <p class="text-gray-600">Gestión de inventario y Armado de Combos.</p>
         </header>
 
         <div id="drop-zone" class="mb-10 border-2 border-dashed border-gray-300 rounded-xl p-12 text-center transition-all cursor-pointer bg-white hover:border-blue-400 group">
@@ -26,30 +29,68 @@
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-400 group-hover:text-blue-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
-                <p class="text-lg font-medium text-gray-700">Haz clic o arrastra tu archivo CSV aquí</p>
-                <p class="text-sm text-gray-500 mt-1">Columnas detectadas: name, sku, sale_price, stock, category y photo_url_1</p>
+                <p class="text-lg font-medium text-gray-700">Arrastra tu archivo CSV aquí</p>
+                <p class="text-sm text-gray-500 mt-1">Columnas requeridas: name, sku, sale_price, stock, category, photo_url_1</p>
             </div>
         </div>
 
-        <div id="controls" class="hidden flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-            <div class="flex flex-col md:flex-row w-full md:w-auto gap-4 flex-grow">
-                <div class="relative flex-grow max-w-md">
+        <div id="controls" class="hidden flex flex-col space-y-4 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="relative md:col-span-2">
                     <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                     </span>
-                    <input type="text" id="search-input" placeholder="Buscar por nombre o SKU..." class="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+                    <input type="text" id="search-input" placeholder="Buscar por nombre o SKU..." class="pl-10 pr-4 py-2.5 w-full border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm">
                 </div>
                 
-                <select id="category-filter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white min-w-[200px]">
+                <select id="category-filter" class="px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm">
                     <option value="">Todas las categorías</option>
                 </select>
+
+                <select id="stock-filter" class="px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm">
+                    <option value="all">Disponibilidad (Todos)</option>
+                    <option value="available">Solo Disponibles</option>
+                    <option value="out_of_stock">Solo Agotados</option>
+                </select>
             </div>
-            <div id="stats" class="text-gray-600 font-medium whitespace-nowrap"></div>
+            
+            <div class="flex justify-between items-center px-2">
+                <div id="stats" class="text-sm font-semibold text-gray-500 uppercase tracking-wider"></div>
+                <button id="reset-filters" class="text-sm text-blue-600 hover:underline font-medium">Limpiar filtros</button>
+            </div>
         </div>
 
-        <div id="status-message" class="hidden p-4 mb-6 rounded-lg text-center font-medium"></div>
+        <div id="status-message" class="hidden p-4 mb-6 rounded-xl text-center font-medium shadow-sm border"></div>
 
         <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
+    </div>
+
+    <div id="combo-bar" class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-10px_25px_-5px_rgba(0,0,0,0.1)] p-4 transform translate-y-full transition-transform duration-300 z-50">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+                <div class="bg-blue-600 text-white p-3 rounded-full hidden md:block">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                </div>
+                <div>
+                    <h4 class="font-bold text-gray-900">Combo en construcción</h4>
+                    <p class="text-sm text-gray-500" id="combo-status-text">Selecciona 2 productos</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3" id="combo-items-preview">
+                <!-- Los items del combo aparecerán aquí -->
+            </div>
+
+            <div class="flex items-center gap-6 border-l pl-6 border-gray-100">
+                <div class="text-right">
+                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total Combo</p>
+                    <p class="text-2xl font-black text-gray-900" id="combo-total-price">Bs. 0.00</p>
+                </div>
+                <button id="clear-combo" class="px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 rounded-lg transition-colors">Cancelar</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -60,67 +101,70 @@
         const controls = document.getElementById('controls');
         const searchInput = document.getElementById('search-input');
         const categoryFilter = document.getElementById('category-filter');
+        const stockFilter = document.getElementById('stock-filter');
+        const resetBtn = document.getElementById('reset-filters');
         const stats = document.getElementById('stats');
+        const comboBar = document.getElementById('combo-bar');
+        const comboTotalDisplay = document.getElementById('combo-total-price');
+        const comboPreview = document.getElementById('combo-items-preview');
+        const clearComboBtn = document.getElementById('clear-combo');
+        const comboStatusText = document.getElementById('combo-status-text');
 
         let allProducts = [];
+        let selectedCombo = [];
 
         dropZone.addEventListener('click', () => fileInput.click());
-        
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('drop-zone--over');
-        });
-
-        ['dragleave', 'dragend'].forEach(type => {
-            dropZone.addEventListener(type, () => {
-                dropZone.classList.remove('drop-zone--over');
-            });
-        });
-
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drop-zone--over'); });
+        ['dragleave', 'dragend'].forEach(type => { dropZone.addEventListener(type, () => dropZone.classList.remove('drop-zone--over')); });
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             dropZone.classList.remove('drop-zone--over');
-            if (e.dataTransfer.files.length) {
-                processFile(e.dataTransfer.files[0]);
-            }
+            if (e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
         });
-
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length) {
-                processFile(e.target.files[0]);
-            }
-        });
+        fileInput.addEventListener('change', (e) => { if (e.target.files.length) processFile(e.target.files[0]); });
 
         searchInput.addEventListener('input', applyFilters);
         categoryFilter.addEventListener('change', applyFilters);
+        stockFilter.addEventListener('change', applyFilters);
+        resetBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            categoryFilter.value = '';
+            stockFilter.value = 'all';
+            applyFilters();
+        });
+
+        clearComboBtn.addEventListener('click', () => {
+            selectedCombo = [];
+            updateComboUI();
+            applyFilters();
+        });
 
         function processFile(file) {
-            showStatus('Procesando archivo...', 'bg-blue-100 text-blue-700');
-            
+            showStatus('Analizando inventario...', 'bg-blue-50 text-blue-700 border-blue-200');
             Papa.parse(file, {
                 header: true,
                 skipEmptyLines: true,
                 complete: function(results) {
                     if (results.data && results.data.length > 0) {
-                        allProducts = results.data.map(row => ({
-                            name: row.name || 'Sin nombre',
-                            sku: row.sku || 'N/A',
-                            price: row.sale_price || '0.00',
-                            stock: row.stock,
-                            category: (row.category || 'Sin Categoría').trim(),
-                            image: row.photo_url_1 || ''
-                        }));
-                        
+                        allProducts = results.data.map(row => {
+                            const stockNum = parseFloat(row.stock) || 0;
+                            return {
+                                name: (row.name || 'Sin nombre').trim(),
+                                sku: (row.sku || 'N/A').trim(),
+                                price: row.sale_price || '0.00',
+                                stock: stockNum,
+                                category: (row.category || 'Sin Categoría').trim(),
+                                image: row.photo_url_1 || ''
+                            };
+                        });
                         updateCategoryDropdown();
                         applyFilters();
                         controls.classList.remove('hidden');
-                        showStatus(`Se han cargado ${allProducts.length} productos correctamente.`, 'bg-green-100 text-green-700');
+                        showStatus(`Inventario listo: ${allProducts.length} productos.`, 'bg-green-50 text-green-700 border-green-200');
+                        dropZone.classList.add('hidden');
                     } else {
-                        showStatus('El archivo parece estar vacío o no tiene el formato correcto.', 'bg-red-100 text-red-700');
+                        showStatus('Error: El archivo CSV no es válido.', 'bg-red-50 text-red-700 border-red-200');
                     }
-                },
-                error: function(err) {
-                    showStatus('Error al leer el archivo: ' + err.message, 'bg-red-100 text-red-700');
                 }
             });
         }
@@ -128,81 +172,130 @@
         function updateCategoryDropdown() {
             const categories = [...new Set(allProducts.map(p => p.category))].sort();
             categoryFilter.innerHTML = '<option value="">Todas las categorías</option>';
-            
             categories.forEach(cat => {
                 const option = document.createElement('option');
-                option.value = cat;
-                option.textContent = cat;
+                option.value = cat; option.textContent = cat;
                 categoryFilter.appendChild(option);
             });
         }
 
         function applyFilters() {
-            const searchTerm = searchInput.value.toLowerCase();
-            const selectedCat = categoryFilter.value;
-
+            const term = searchInput.value.toLowerCase();
+            const cat = categoryFilter.value;
+            const stockMode = stockFilter.value;
             const filtered = allProducts.filter(p => {
-                const matchesSearch = p.name.toLowerCase().includes(searchTerm) || p.sku.toLowerCase().includes(searchTerm);
-                const matchesCategory = selectedCat === "" || p.category === selectedCat;
-                return matchesSearch && matchesCategory;
+                const matchesSearch = p.name.toLowerCase().includes(term) || p.sku.toLowerCase().includes(term);
+                const matchesCat = cat === "" || p.category === cat;
+                let matchesStock = true;
+                if (stockMode === 'available') matchesStock = p.stock > 0;
+                if (stockMode === 'out_of_stock') matchesStock = p.stock <= 0;
+                return matchesSearch && matchesCat && matchesStock;
+            });
+            renderProducts(filtered);
+        }
+
+        function toggleCombo(sku) {
+            const product = allProducts.find(p => p.sku === sku);
+            const index = selectedCombo.findIndex(p => p.sku === sku);
+
+            if (index > -1) {
+                selectedCombo.splice(index, 1);
+            } else {
+                if (selectedCombo.length < 2) {
+                    selectedCombo.push(product);
+                } else {
+                    alert("Solo puedes agregar 2 productos para armar un combo.");
+                }
+            }
+            updateComboUI();
+            applyFilters();
+        }
+
+        function updateComboUI() {
+            if (selectedCombo.length > 0) {
+                comboBar.classList.remove('translate-y-full');
+            } else {
+                comboBar.classList.add('translate-y-full');
+            }
+
+            comboPreview.innerHTML = '';
+            let total = 0;
+
+            selectedCombo.forEach(p => {
+                const price = parseFloat(p.price.toString().replace(/[^\d.]/g, '')) || 0;
+                total += price;
+
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'flex items-center gap-2 bg-gray-50 p-1.5 pr-3 rounded-lg border border-gray-200';
+                itemDiv.innerHTML = `
+                    <div class="w-8 h-8 rounded-md bg-white overflow-hidden">
+                        <img src="${p.image}" class="w-full h-full object-contain" onerror="this.src='https://placehold.co/32x32?text=?'">
+                    </div>
+                    <span class="text-xs font-bold text-gray-700 truncate max-w-[100px]">${p.name}</span>
+                `;
+                comboPreview.appendChild(itemDiv);
             });
 
-            renderProducts(filtered);
+            if (selectedCombo.length === 1) {
+                comboStatusText.innerText = "Falta 1 producto más";
+                comboPreview.innerHTML += `<div class="w-8 h-8 rounded-md border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-300 text-lg">+</div>`;
+            } else if (selectedCombo.length === 2) {
+                comboStatusText.innerText = "¡Combo completo!";
+                comboStatusText.classList.add('text-green-600');
+            } else {
+                comboStatusText.classList.remove('text-green-600');
+            }
+
+            comboTotalDisplay.innerText = `Bs. ${new Intl.NumberFormat('es-BO', { minimumFractionDigits: 2 }).format(total)}`;
         }
 
         function renderProducts(products) {
             productGrid.innerHTML = '';
-            stats.innerText = `Mostrando ${products.length} productos`;
-
-            if (products.length === 0) {
-                productGrid.innerHTML = `
-                    <div class="col-span-full py-12 text-center text-gray-500">
-                        No se encontraron productos con estos criterios.
-                    </div>
-                `;
-                return;
-            }
+            stats.innerText = `${products.length} productos encontrados`;
 
             products.forEach(product => {
                 const card = document.createElement('div');
-                card.className = 'bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow border border-gray-200 overflow-hidden flex flex-col';
-                
+                const isInCombo = selectedCombo.some(p => p.sku === product.sku);
                 const rawPrice = parseFloat(product.price.toString().replace(/[^\d.]/g, '')) || 0;
-                const formattedNumber = new Intl.NumberFormat('es-BO', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2
-                }).format(rawPrice);
-                const formattedPrice = `Bs. ${formattedNumber}`;
+                const formattedPrice = `Bs. ${new Intl.NumberFormat('es-BO', { minimumFractionDigits: 2 }).format(rawPrice)}`;
+                const isAvailable = product.stock > 0;
 
-                const stockValue = parseFloat(product.stock);
-                const isAvailable = !isNaN(stockValue) && stockValue > 0;
+                card.className = `bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border ${isInCombo ? 'border-blue-500 ring-2 ring-blue-100' : 'border-gray-100'} overflow-hidden flex flex-col group`;
                 
-                const stockBadge = isAvailable 
-                    ? '<span class="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Disponible</span>'
-                    : '<span class="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Agotado</span>';
-
                 card.innerHTML = `
-                    <div class="aspect-square bg-gray-100 relative overflow-hidden flex items-center justify-center">
+                    <div class="aspect-square bg-gray-50 relative overflow-hidden flex items-center justify-center p-4">
                         ${product.image ? 
-                            `<img src="${product.image}" alt="${product.name}" class="object-contain w-full h-full" onerror="this.parentElement.innerHTML='<div class=\'text-gray-400 text-xs text-center p-2\'>Imagen no disponible</div>';">` : 
-                            `<div class="text-gray-400 text-sm flex flex-col items-center">
-                                <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                Sin Imagen
-                            </div>`
+                            `<img src="${product.image}" class="object-contain w-full h-full group-hover:scale-105 transition-transform duration-500" onerror="this.parentElement.innerHTML='<span class=\'text-gray-300 text-xs\'>Imagen no disponible</span>';">` : 
+                            `<div class="text-gray-300"><svg class="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>`
                         }
-                        <div class="absolute top-2 right-2 flex flex-col gap-1 items-end">
-                            ${stockBadge}
+                        <div class="absolute top-3 right-3 flex flex-col gap-2 items-end">
+                            <span class="${isAvailable ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} text-[10px] font-bold px-2.5 py-1 rounded-full uppercase shadow-sm">
+                                ${isAvailable ? 'Disponible' : 'Agotado'}
+                            </span>
                         </div>
                     </div>
-                    <div class="p-4 flex-grow flex flex-col">
-                        <div class="flex justify-between items-start mb-1">
-                            <span class="text-[10px] font-bold text-blue-600 tracking-wider uppercase">SKU: ${product.sku}</span>
-                            <span class="text-[10px] font-medium bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">${product.category}</span>
+                    <div class="p-5 flex-grow flex flex-col">
+                        <div class="flex justify-between items-start mb-2 gap-2">
+                            <span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">SKU: ${product.sku}</span>
+                            <span class="text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded truncate max-w-[100px]">${product.category}</span>
                         </div>
-                        <h3 class="text-gray-900 font-semibold text-lg line-clamp-2 mb-2 h-14" title="${product.name}">${product.name}</h3>
-                        <div class="mt-auto pt-4 flex items-center justify-between border-t border-gray-100">
-                            <span class="text-2xl font-bold text-gray-900">${formattedPrice}</span>
+                        <h3 class="text-gray-800 font-bold text-md line-clamp-2 mb-4 h-10 leading-tight" title="${product.name}">${product.name}</h3>
+                        <div class="flex items-end justify-between mb-4">
+                            <div>
+                                <p class="text-[10px] text-gray-400 font-bold uppercase mb-0.5">Precio</p>
+                                <span class="text-xl font-extrabold text-gray-900">${formattedPrice}</span>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-[10px] text-gray-400 font-bold uppercase mb-0.5">Stock</p>
+                                <span class="text-sm font-bold ${isAvailable ? 'text-gray-700' : 'text-red-500'}">${product.stock} u.</span>
+                            </div>
                         </div>
+                        <button onclick="toggleCombo('${product.sku}')" class="w-full py-2.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${isInCombo ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}">
+                            ${isInCombo ? 
+                                `<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> Seleccionado` : 
+                                `+ Añadir al Combo`
+                            }
+                        </button>
                     </div>
                 `;
                 productGrid.appendChild(card);
@@ -211,7 +304,7 @@
 
         function showStatus(message, classes) {
             statusMessage.innerText = message;
-            statusMessage.className = `p-4 mb-6 rounded-lg text-center font-medium ${classes}`;
+            statusMessage.className = `p-4 mb-6 rounded-xl text-center font-medium shadow-sm border ${classes}`;
             statusMessage.classList.remove('hidden');
         }
     </script>
