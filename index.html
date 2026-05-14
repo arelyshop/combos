@@ -87,8 +87,8 @@
             <div class="flex flex-wrap items-center justify-between gap-4 bg-white p-5 rounded-[24px] border border-gray-100 shadow-sm">
                 <div id="stats" class="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Cargando herramientas...</div>
                 <div class="flex gap-4 items-center">
-                    <button id="export-catalog-btn" class="px-8 py-3 bg-gray-900 text-white text-[10px] font-black rounded-xl hover:bg-black transition-all uppercase tracking-widest shadow-lg active:scale-95">
-                        Exportar Catálogo
+                    <button id="export-all-btn" class="px-8 py-3 bg-gray-900 text-white text-[10px] font-black rounded-xl hover:bg-black transition-all uppercase tracking-widest shadow-lg active:scale-95">
+                        Exportar Todo
                     </button>
                     <button id="reset-filters" class="text-[10px] font-black text-gray-400 hover:text-red-500 uppercase tracking-widest transition-colors">Limpiar Filtros</button>
                 </div>
@@ -102,15 +102,23 @@
     <div id="selection-bar" class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-100 shadow-[0_-20px_50px_rgba(0,0,0,0.1)] p-5 transform translate-y-full transition-transform duration-500 z-40">
         <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-10 divide-y lg:divide-y-0 lg:divide-x divide-gray-100">
             
-            <div class="py-2 lg:pr-10">
-                <div class="flex justify-between items-center mb-4">
-                    <div>
+            <div class="py-2 lg:pr-10 flex flex-col sm:flex-row items-center gap-8 justify-between">
+                <div class="flex items-center gap-4 w-full sm:w-auto overflow-hidden">
+                    <div class="flex-shrink-0">
                         <h4 class="font-black text-gray-900 text-sm uppercase italic tracking-tighter">Mi Selección</h4>
                         <p class="text-[9px] text-emerald-600 font-black uppercase tracking-widest" id="catalog-count-text">0 ítems seleccionados</p>
                     </div>
-                    <button id="clear-catalog" class="text-[9px] font-black text-red-500 uppercase hover:underline tracking-widest">Vaciar Lista</button>
+                    <div id="manual-catalog-preview" class="flex gap-3 overflow-x-auto custom-scrollbar py-1 max-w-[150px] md:max-w-[250px]"></div>
                 </div>
-                <div id="manual-catalog-preview" class="flex gap-3 overflow-x-auto pb-2 custom-scrollbar min-h-[50px]"></div>
+
+                <div class="flex items-center gap-4 flex-shrink-0">
+                    <div class="flex flex-col gap-2 w-full">
+                        <button id="export-catalog-btn" class="hidden px-8 py-3 bg-emerald-600 text-white text-[10px] font-black rounded-xl hover:bg-emerald-700 transition-all shadow-xl uppercase tracking-widest active:scale-95">
+                            Exportar Selección
+                        </button>
+                        <button id="clear-catalog" class="hidden text-[9px] font-black text-red-500 uppercase hover:underline text-center">Vaciar Lista</button>
+                    </div>
+                </div>
             </div>
 
             <div class="py-2 lg:pl-10 flex flex-col sm:flex-row items-center gap-8 justify-between">
@@ -185,6 +193,7 @@
         const copyBtn = document.getElementById('copy-btn');
         const downloadBtn = document.getElementById('download-btn');
         const exportCatalogBtn = document.getElementById('export-catalog-btn');
+        const exportAllBtn = document.getElementById('export-all-btn');
         const statsEl = document.getElementById('stats');
         const loadingZone = document.getElementById('loading-zone');
 
@@ -386,7 +395,9 @@
                 manualCatalogPreview.appendChild(d);
             });
             catalogCountText.innerText = `${selectedCatalog.length} ítems seleccionados`;
-            exportCatalogBtn.innerText = selectedCatalog.length > 0 ? "Exportar Selección" : "Exportar Catálogo";
+            
+            exportCatalogBtn.classList.toggle('hidden', selectedCatalog.length === 0);
+            document.getElementById('clear-catalog').classList.toggle('hidden', selectedCatalog.length === 0);
 
             renderProducts(filteredProducts);
         }
@@ -494,8 +505,8 @@
             previewModal.classList.add('active');
         }
 
-        async function drawCatalog() {
-            const list = selectedCatalog.length > 0 ? selectedCatalog : filteredProducts;
+        async function drawCatalog(exportAll = false) {
+            const list = (exportAll || selectedCatalog.length === 0) ? filteredProducts : selectedCatalog;
             if (list.length === 0) return alert("No hay productos seleccionados para exportar.");
 
             const rH = 750; const hH = 220; const fH = 120;
@@ -539,7 +550,8 @@
         }
 
         openPreviewBtn.onclick = drawCombo;
-        exportCatalogBtn.onclick = drawCatalog;
+        exportAllBtn.onclick = () => drawCatalog(true);
+        exportCatalogBtn.onclick = () => drawCatalog(false);
         closeModal.onclick = () => previewModal.classList.remove('active');
         
         copyBtn.onclick = () => {
