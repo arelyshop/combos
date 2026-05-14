@@ -1,0 +1,8 @@
+{
+  "name": "arelyshop-ventas",
+  "version": "1.0.0",
+  "description": "Catalogo de productos conectado a Neon",
+  "dependencies": {
+    "pg": "^8.11.3"
+  }
+}
