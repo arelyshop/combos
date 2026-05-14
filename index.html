@@ -133,9 +133,12 @@
             <div class="p-10 overflow-y-auto flex-grow bg-gray-100 flex justify-center items-start">
                 <canvas id="render-canvas"></canvas>
             </div>
-            <div class="p-8 bg-white border-t flex flex-col gap-3">
-                <button id="download-btn" class="w-full py-5 bg-blue-600 text-white font-black rounded-3xl hover:bg-blue-700 shadow-2xl shadow-blue-200 uppercase tracking-[0.2em] text-[11px] transition-all active:scale-95">
-                    Descargar Imagen JPG (1000px)
+            <div class="p-8 bg-white border-t flex flex-col sm:flex-row gap-3">
+                <button id="copy-btn" class="flex-1 py-5 bg-emerald-600 text-white font-black rounded-3xl hover:bg-emerald-700 shadow-2xl shadow-emerald-200 uppercase tracking-[0.2em] text-[11px] transition-all active:scale-95">
+                    Copiar Imagen
+                </button>
+                <button id="download-btn" class="flex-1 py-5 bg-blue-600 text-white font-black rounded-3xl hover:bg-blue-700 shadow-2xl shadow-blue-200 uppercase tracking-[0.2em] text-[11px] transition-all active:scale-95">
+                    Descargar JPG
                 </button>
             </div>
         </div>
@@ -162,6 +165,7 @@
         const renderCanvas = document.getElementById('render-canvas');
         const ctx = renderCanvas.getContext('2d');
         const closeModal = document.getElementById('close-modal');
+        const copyBtn = document.getElementById('copy-btn');
         const downloadBtn = document.getElementById('download-btn');
         const exportCatalogBtn = document.getElementById('export-catalog-btn');
         const statsEl = document.getElementById('stats');
@@ -504,6 +508,35 @@
         openPreviewBtn.onclick = drawCombo;
         exportCatalogBtn.onclick = drawCatalog;
         closeModal.onclick = () => previewModal.classList.remove('active');
+        
+        copyBtn.onclick = () => {
+            const originalText = copyBtn.innerText;
+            copyBtn.innerText = 'COPIANDO...';
+            try {
+                renderCanvas.toBlob(async (blob) => {
+                    try {
+                        const item = new ClipboardItem({ 'image/png': blob });
+                        await navigator.clipboard.write([item]);
+                        copyBtn.innerText = '¡COPIADO!';
+                        copyBtn.classList.replace('bg-emerald-600', 'bg-gray-800');
+                        copyBtn.classList.replace('hover:bg-emerald-700', 'hover:bg-gray-900');
+                        
+                        setTimeout(() => {
+                            copyBtn.innerText = originalText;
+                            copyBtn.classList.replace('bg-gray-800', 'bg-emerald-600');
+                            copyBtn.classList.replace('hover:bg-gray-900', 'hover:bg-emerald-700');
+                        }, 2000);
+                    } catch (err) {
+                        copyBtn.innerText = 'ERROR (USA DESCARGAR)';
+                        setTimeout(() => copyBtn.innerText = originalText, 3000);
+                    }
+                }, 'image/png');
+            } catch (err) {
+                copyBtn.innerText = 'NAVEGADOR NO SOPORTADO';
+                setTimeout(() => copyBtn.innerText = originalText, 3000);
+            }
+        };
+
         downloadBtn.onclick = () => {
             const link = document.createElement('a');
             link.download = `ArelyShop_${Date.now()}.jpg`;
