@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visor de Productos CSV</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .drop-zone--over { border-color: #3b82f6; background-color: #eff6ff; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <header class="mb-10 text-center">
+            <h1 class="text-4xl font-bold text-gray-900 mb-2">Catálogo de Productos</h1>
+            <p class="text-gray-600">Visualiza SKU, Nombre, Precio, Stock y Categorías de tu inventario.</p>
+        </header>
+
+        <div id="drop-zone" class="mb-10 border-2 border-dashed border-gray-300 rounded-xl p-12 text-center transition-all cursor-pointer bg-white hover:border-blue-400 group">
+            <input type="file" id="csv-file" accept=".csv" class="hidden">
+            <div class="flex flex-col items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-400 group-hover:text-blue-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <p class="text-lg font-medium text-gray-700">Haz clic o arrastra tu archivo CSV aquí</p>
+                <p class="text-sm text-gray-500 mt-1">Columnas detectadas: name, sku, sale_price, stock, category y photo_url_1</p>
+            </div>
+        </div>
+
+        <div id="controls" class="hidden flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+            <div class="flex flex-col md:flex-row w-full md:w-auto gap-4 flex-grow">
+                <div class="relative flex-grow max-w-md">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </span>
+                    <input type="text" id="search-input" placeholder="Buscar por nombre o SKU..." class="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+                </div>
+                
+                <select id="category-filter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white min-w-[200px]">
+                    <option value="">Todas las categorías</option>
+                </select>
+            </div>
+            <div id="stats" class="text-gray-600 font-medium whitespace-nowrap"></div>
+        </div>
+
+        <div id="status-message" class="hidden p-4 mb-6 rounded-lg text-center font-medium"></div>
+
+        <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('csv-file');
+        const dropZone = document.getElementById('drop-zone');
+        const productGrid = document.getElementById('product-grid');
+        const statusMessage = document.getElementById('status-message');
+        const controls = document.getElementById('controls');
+        const searchInput = document.getElementById('search-input');
+        const categoryFilter = document.getElementById('category-filter');
+        const stats = document.getElementById('stats');
+
+        let allProducts = [];
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drop-zone--over');
+        });
+
+        ['dragleave', 'dragend'].forEach(type => {
+            dropZone.addEventListener(type, () => {
+                dropZone.classList.remove('drop-zone--over');
+            });
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drop-zone--over');
+            if (e.dataTransfer.files.length) {
+                processFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) {
+                processFile(e.target.files[0]);
+            }
+        });
+
+        searchInput.addEventListener('input', applyFilters);
+        categoryFilter.addEventListener('change', applyFilters);
+
+        function processFile(file) {
+            showStatus('Procesando archivo...', 'bg-blue-100 text-blue-700');
+            
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    if (results.data && results.data.length > 0) {
+                        allProducts = results.data.map(row => ({
+                            name: row.name || 'Sin nombre',
+                            sku: row.sku || 'N/A',
+                            price: row.sale_price || '0.00',
+                            stock: row.stock,
+                            category: (row.category || 'Sin Categoría').trim(),
+                            image: row.photo_url_1 || ''
+                        }));
+                        
+                        updateCategoryDropdown();
+                        applyFilters();
+                        controls.classList.remove('hidden');
+                        showStatus(`Se han cargado ${allProducts.length} productos correctamente.`, 'bg-green-100 text-green-700');
+                    } else {
+                        showStatus('El archivo parece estar vacío o no tiene el formato correcto.', 'bg-red-100 text-red-700');
+                    }
+                },
+                error: function(err) {
+                    showStatus('Error al leer el archivo: ' + err.message, 'bg-red-100 text-red-700');
+                }
+            });
+        }
+
+        function updateCategoryDropdown() {
+            const categories = [...new Set(allProducts.map(p => p.category))].sort();
+            categoryFilter.innerHTML = '<option value="">Todas las categorías</option>';
+            
+            categories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat;
+                option.textContent = cat;
+                categoryFilter.appendChild(option);
+            });
+        }
+
+        function applyFilters() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const selectedCat = categoryFilter.value;
+
+            const filtered = allProducts.filter(p => {
+                const matchesSearch = p.name.toLowerCase().includes(searchTerm) || p.sku.toLowerCase().includes(searchTerm);
+                const matchesCategory = selectedCat === "" || p.category === selectedCat;
+                return matchesSearch && matchesCategory;
+            });
+
+            renderProducts(filtered);
+        }
+
+        function renderProducts(products) {
+            productGrid.innerHTML = '';
+            stats.innerText = `Mostrando ${products.length} productos`;
+
+            if (products.length === 0) {
+                productGrid.innerHTML = `
+                    <div class="col-span-full py-12 text-center text-gray-500">
+                        No se encontraron productos con estos criterios.
+                    </div>
+                `;
+                return;
+            }
+
+            products.forEach(product => {
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow border border-gray-200 overflow-hidden flex flex-col';
+                
+                const rawPrice = parseFloat(product.price.toString().replace(/[^\d.]/g, '')) || 0;
+                const formattedNumber = new Intl.NumberFormat('es-BO', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                }).format(rawPrice);
+                const formattedPrice = `Bs. ${formattedNumber}`;
+
+                const stockValue = parseFloat(product.stock);
+                const isAvailable = !isNaN(stockValue) && stockValue > 0;
+                
+                const stockBadge = isAvailable 
+                    ? '<span class="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Disponible</span>'
+                    : '<span class="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Agotado</span>';
+
+                card.innerHTML = `
+                    <div class="aspect-square bg-gray-100 relative overflow-hidden flex items-center justify-center">
+                        ${product.image ? 
+                            `<img src="${product.image}" alt="${product.name}" class="object-contain w-full h-full" onerror="this.parentElement.innerHTML='<div class=\'text-gray-400 text-xs text-center p-2\'>Imagen no disponible</div>';">` : 
+                            `<div class="text-gray-400 text-sm flex flex-col items-center">
+                                <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                Sin Imagen
+                            </div>`
+                        }
+                        <div class="absolute top-2 right-2 flex flex-col gap-1 items-end">
+                            ${stockBadge}
+                        </div>
+                    </div>
+                    <div class="p-4 flex-grow flex flex-col">
+                        <div class="flex justify-between items-start mb-1">
+                            <span class="text-[10px] font-bold text-blue-600 tracking-wider uppercase">SKU: ${product.sku}</span>
+                            <span class="text-[10px] font-medium bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">${product.category}</span>
+                        </div>
+                        <h3 class="text-gray-900 font-semibold text-lg line-clamp-2 mb-2 h-14" title="${product.name}">${product.name}</h3>
+                        <div class="mt-auto pt-4 flex items-center justify-between border-t border-gray-100">
+                            <span class="text-2xl font-bold text-gray-900">${formattedPrice}</span>
+                        </div>
+                    </div>
+                `;
+                productGrid.appendChild(card);
+            });
+        }
+
+        function showStatus(message, classes) {
+            statusMessage.innerText = message;
+            statusMessage.className = `p-4 mb-6 rounded-lg text-center font-medium ${classes}`;
+            statusMessage.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
