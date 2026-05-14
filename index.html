@@ -19,7 +19,6 @@
     <meta name="twitter:image" content="https://ventas12.netlify.app/images/arelyshop-preview.webp">
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; overflow-x: hidden; }
@@ -45,6 +44,18 @@
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .line-through-red { text-decoration: line-through; text-decoration-color: #ef4444; text-decoration-thickness: 2px; }
+
+        /* Spinner Animado */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #2563eb;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen pb-64">
@@ -55,17 +66,11 @@
             <p class="text-gray-500 text-sm font-bold tracking-widest uppercase mt-1">Gestor de Inventario & Artes Visuales</p>
         </header>
 
-        <div id="drop-zone" class="mb-10 border-4 border-dashed border-gray-200 rounded-[32px] p-12 text-center transition-all cursor-pointer bg-white hover:border-blue-500 hover:bg-blue-50/30 group shadow-sm">
-            <input type="file" id="csv-file" accept=".csv" class="hidden">
-            <div class="flex flex-col items-center">
-                <div class="bg-blue-600 p-5 rounded-3xl mb-4 shadow-xl shadow-blue-200 group-hover:scale-110 transition-transform">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                </div>
-                <p class="text-xl font-black text-gray-800 uppercase italic">Suelta tu archivo CSV aquí</p>
-                <p class="text-[10px] text-gray-400 mt-2 font-bold tracking-[0.2em] uppercase">name • sku • sale_price • discount_price • stock • category</p>
-            </div>
+        <!-- Zona de Carga Inicial -->
+        <div id="loading-zone" class="mb-10 border-4 border-dashed border-gray-200 rounded-[32px] p-16 text-center bg-white shadow-sm">
+            <div class="loader"></div>
+            <p class="text-xl font-black text-gray-800 uppercase italic" id="loading-title">Conectando a Base de Datos...</p>
+            <p class="text-[10px] text-gray-400 mt-2 font-bold tracking-[0.2em] uppercase" id="loading-subtitle">Descargando inventario desde Neon</p>
         </div>
 
         <div id="controls" class="hidden flex flex-col space-y-4 mb-8 animate-in fade-in duration-700">
@@ -159,8 +164,6 @@
     </div>
 
     <script>
-        const fileInput = document.getElementById('csv-file');
-        const dropZone = document.getElementById('drop-zone');
         const productGrid = document.getElementById('product-grid');
         const statusMessage = document.getElementById('status-message');
         const controls = document.getElementById('controls');
@@ -183,6 +186,7 @@
         const downloadBtn = document.getElementById('download-btn');
         const exportCatalogBtn = document.getElementById('export-catalog-btn');
         const statsEl = document.getElementById('stats');
+        const loadingZone = document.getElementById('loading-zone');
 
         let allProducts = [];
         let filteredProducts = [];
@@ -191,18 +195,8 @@
 
         const OFFER_ICON_PATH = "m20.749 12 1.104-1.908a1 1 0 0 0-.365-1.366l-1.91-1.104v-2.2a1 1 0 0 0-1-1h-2.199l-1.103-1.909a1.008 1.008 0 0 0-.607-.466.993.993 0 0 0-.759.1L12 3.251l-1.91-1.105a1 1 0 0 0-1.366.366L7.62 4.422H5.421a1 1 0 0 0-1 1v2.199l-1.91 1.104a.998.998 0 0 0-.365 1.367L3.25 12l-1.104 1.908a1.004 1.004 0 0 0 .364 1.367l1.91 1.104v2.199a1 1 0 0 0 1 1h2.2l1.104 1.91a1.01 1.01 0 0 0 .866.5c.174 0 .347-.046.501-.135l1.908-1.104 1.91 1.104a1.001 1.001 0 0 0 1.366-.365l1.103-1.91h2.199a1 1 0 0 0 1-1v-2.199l1.91-1.104a1 1 0 0 0 .365-1.367L20.749 12zM9.499 6.99a1.5 1.5 0 1 1-.001 3.001 1.5 1.5 0 0 1 .001-3.001zm.3 9.6-1.6-1.199 6-8 1.6 1.199-6 8zm4.7.4a1.5 1.5 0 1 1 .001-3.001 1.5 1.5 0 0 1-.001 3.001z";
 
-        dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-blue-500', 'bg-blue-50'); });
-        ['dragleave', 'dragend'].forEach(type => { dropZone.addEventListener(type, () => dropZone.classList.remove('border-blue-500', 'bg-blue-50')); });
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('border-blue-500', 'bg-blue-50');
-            if (e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
-        });
-        fileInput.addEventListener('change', (e) => { if(e.target.files.length) processFile(e.target.files[0]); });
-
         function cleanPrice(val) {
-            if (!val) return 0;
+            if (val === null || val === undefined || val === '') return 0;
             const cleaned = val.toString().replace(/[^\d.,]/g, '').replace(',', '.');
             return parseFloat(cleaned) || 0;
         }
@@ -211,41 +205,68 @@
             return `Bs. ${new Intl.NumberFormat('es-BO', { minimumFractionDigits: 2 }).format(num)}`;
         }
 
-        function processFile(file) {
-            statusMessage.innerText = "PROCESANDO...";
-            statusMessage.className = "p-4 mb-6 rounded-2xl text-center text-xs font-black bg-blue-50 text-blue-700 border-blue-100 block";
-            
-            Papa.parse(file, {
-                header: true,
-                skipEmptyLines: true,
-                transformHeader: h => h.trim().toLowerCase(),
-                complete: function(results) {
-                    if (results.data && results.data.length > 0) {
-                        allProducts = results.data.map(row => {
-                            const sp = cleanPrice(row.sale_price);
-                            const dp = cleanPrice(row.discount_price);
-                            const isOffer = dp > 0 && dp < sp;
-                            return {
-                                name: (row.name || 'Sin nombre').trim(),
-                                sku: (row.sku || 'N/A').trim(),
-                                originalPrice: sp,
-                                finalPrice: isOffer ? dp : sp,
-                                hasOffer: isOffer,
-                                stock: parseFloat(row.stock) || 0,
-                                category: (row.category || 'General').trim(),
-                                image: row.photo_url_1 || ''
-                            };
-                        });
-                        updateCategoryDropdown();
-                        applyFilters();
-                        controls.classList.remove('hidden');
-                        dropZone.classList.add('hidden');
-                        statusMessage.innerText = "INVENTARIO CARGADO";
-                        statusMessage.className = "p-4 mb-6 rounded-2xl text-center text-xs font-black bg-green-50 text-green-700 border-green-100 block";
-                    }
+        // NUEVA FUNCIÓN: Obtener datos de la base de datos a través de Netlify Functions
+        async function fetchNeonData() {
+            try {
+                // Esta ruta llamará al backend de Netlify que configuraremos
+                const response = await fetch('/.netlify/functions/get-products');
+                
+                if (!response.ok) {
+                    throw new Error('No se pudo obtener la base de datos');
                 }
-            });
+
+                const data = await response.json();
+
+                if (data && data.length > 0) {
+                    allProducts = data.map(row => {
+                        const sp = cleanPrice(row.sale_price);
+                        const dp = cleanPrice(row.discount_price);
+                        const isOffer = dp > 0 && dp < sp;
+                        return {
+                            name: (row.name || 'Sin nombre').trim(),
+                            sku: (row.sku || 'N/A').trim(),
+                            originalPrice: sp,
+                            finalPrice: isOffer ? dp : sp,
+                            hasOffer: isOffer,
+                            stock: parseInt(row.stock) || 0,
+                            category: (row.category || 'General').trim(),
+                            image: row.photo_url_1 || '',
+                            sucursal: (row.ciudad_sucursal || 'Sin Sucursal').trim()
+                        };
+                    });
+                    
+                    updateCategoryDropdown();
+                    applyFilters();
+                    
+                    loadingZone.classList.add('hidden');
+                    controls.classList.remove('hidden');
+                    
+                    statusMessage.innerText = "INVENTARIO SINCRONIZADO";
+                    statusMessage.className = "p-4 mb-6 rounded-2xl text-center text-xs font-black bg-green-50 text-green-700 border-green-100 block";
+                    
+                    setTimeout(() => { statusMessage.classList.add('hidden'); }, 4000);
+                } else {
+                    throw new Error('La base de datos está vacía');
+                }
+            } catch (error) {
+                console.error("Error cargando DB:", error);
+                loadingZone.innerHTML = `
+                    <div class="bg-red-100 text-red-700 p-5 rounded-3xl inline-block mb-4 shadow-xl shadow-red-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <p class="text-xl font-black text-gray-800 uppercase italic">Error de Conexión</p>
+                    <p class="text-[10px] text-red-500 mt-2 font-bold tracking-[0.2em] uppercase max-w-sm mx-auto">
+                        No se pudo conectar con la base de datos Neon. Asegúrate de haber configurado la función de Netlify.
+                    </p>
+                    <button onclick="window.location.reload()" class="mt-6 px-6 py-2 bg-gray-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-black">Reintentar</button>
+                `;
+            }
         }
+
+        // Cargar los productos automáticamente al abrir la página
+        window.addEventListener('DOMContentLoaded', fetchNeonData);
 
         function updateCategoryDropdown() {
             const categories = [...new Set(allProducts.map(p => p.category))].filter(c => c).sort();
@@ -289,8 +310,8 @@
                              onload="document.getElementById('sk-${p.sku}')?.remove();"
                              onerror="this.src='https://placehold.co/400x400/f3f4f6/9ca3af?text=Sin+Imagen';">
                         
-                        <div class="absolute top-4 left-4 z-20">
-                            <span class="${isAvail ? 'bg-emerald-600' : 'bg-red-600'} text-white text-[9px] font-black px-3 py-1.5 rounded-full uppercase shadow-lg border-2 border-white">${isAvail ? 'Disponible' : 'Agotado'}</span>
+                        <div class="absolute top-4 left-4 z-20 flex flex-col gap-2 items-start">
+                            <span class="${isAvail ? 'bg-emerald-600' : 'bg-red-600'} text-white text-[9px] font-black px-3 py-1.5 rounded-full uppercase shadow-lg border-2 border-white">${isAvail ? `Stock: ${p.stock}` : 'Agotado'}</span>
                         </div>
                         
                         ${p.hasOffer ? `
@@ -299,9 +320,12 @@
                         </div>` : ''}
                     </div>
                     <div class="p-6 flex flex-col flex-grow">
-                        <div class="flex justify-between items-start mb-2">
+                        <div class="flex justify-between items-center mb-2">
                             <span class="text-[9px] font-black text-blue-600 uppercase tracking-tighter">SKU: ${p.sku}</span>
-                            <span class="text-[9px] font-bold text-gray-300 uppercase">${p.category}</span>
+                            <div class="flex items-center gap-1">
+                                <span class="text-[8px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md uppercase">${p.category}</span>
+                                <span class="text-[8px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md uppercase">${p.sucursal}</span>
+                            </div>
                         </div>
                         <h3 class="text-gray-900 font-bold text-[12px] leading-tight line-clamp-2 h-10 mb-4">${p.name}</h3>
                         <div class="mt-auto">
@@ -431,18 +455,14 @@
                 ctx.fillStyle = "#374151"; ctx.font = "bold 28px Inter"; wrapText(ctx, p.name, x + sz/2, y + 600, sz, 36);
                 
                 if (p.hasOffer) {
-                    // Precio original tachado (Reducido de 32px a 28px)
                     ctx.fillStyle = "#9ca3af"; ctx.font = "bold 28px Inter";
                     const oldTxt = formatCurrency(p.originalPrice);
                     ctx.fillText(oldTxt, x + sz/2, y + 660);
                     const tw = ctx.measureText(oldTxt).width;
                     ctx.strokeStyle = "#EF4444"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + sz/2 - tw/2 - 5, y + 652); ctx.lineTo(x + sz/2 + tw/2 + 5, y + 652); ctx.stroke();
-                    
-                    // Precio oferta (Reducido de 58px a 48px para evitar amontonamiento)
                     ctx.fillStyle = "#EF4444"; ctx.font = "900 48px Inter";
                     ctx.fillText(formatCurrency(p.finalPrice), x + sz/2, y + 715);
                 } else {
-                    // Precio normal (Reducido de 58px a 48px)
                     ctx.fillStyle = "#111827"; ctx.font = "900 48px Inter"; 
                     ctx.fillText(formatCurrency(p.finalPrice), x + sz/2, y + 710);
                 }
@@ -467,7 +487,6 @@
             ctx.fillStyle = "#2563EB"; ctx.font = "900 32px Inter"; ctx.fillText("DESCUENTO EN COMBO", 500, 1045);
             ctx.fillStyle = "#f9fafb"; ctx.beginPath(); ctx.roundRect(100, 1065, 800, 110, 30); ctx.fill(); ctx.strokeStyle = "#E5E7EB"; ctx.stroke();
             
-            // Precio de combo mediano centrado
             ctx.fillStyle = "#111827"; ctx.font = "900 65px Inter"; ctx.textBaseline = "middle";
             ctx.fillText(formatCurrency(cp > 0 ? cp : sumO), 500, 1120);
             ctx.textBaseline = "alphabetic";
