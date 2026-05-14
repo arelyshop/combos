@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visor Pro Bs. - Creador de Combos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
+        }
+        @keyframes skeleton-loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        #preview-modal { display: none; }
+        #preview-modal.active { display: flex; }
+        
+        #render-canvas {
+            max-width: 100%;
+            height: auto;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            background-color: white;
+            border-radius: 12px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen pb-40">
+
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-black text-gray-900 tracking-tighter uppercase italic">Catálogo Pro Bs.</h1>
+            <p class="text-gray-500 text-sm">Gestiona productos y genera imágenes de combos profesionales.</p>
+        </header>
+
+        <!-- Zona de Carga -->
+        <div id="drop-zone" class="mb-10 border-2 border-dashed border-gray-300 rounded-2xl p-10 text-center transition-all cursor-pointer bg-white hover:border-blue-500 group shadow-sm">
+            <input type="file" id="csv-file" accept=".csv" class="hidden">
+            <div class="flex flex-col items-center">
+                <div class="bg-blue-50 p-4 rounded-full mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                </div>
+                <p class="text-lg font-bold text-gray-700">Arrastra tu CSV de productos aquí</p>
+            </div>
+        </div>
+
+        <!-- Controles de Filtro -->
+        <div id="controls" class="hidden flex flex-col space-y-4 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <input type="text" id="search-input" placeholder="Nombre o SKU..." class="md:col-span-2 px-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 shadow-sm">
+                <select id="category-filter" class="px-4 py-3 border border-gray-200 rounded-xl bg-white shadow-sm font-medium text-gray-600"></select>
+                <select id="stock-filter" class="px-4 py-3 border border-gray-200 rounded-xl bg-white shadow-sm font-medium text-gray-600">
+                    <option value="all">Todos los productos</option>
+                    <option value="available">Solo con Stock</option>
+                    <option value="out_of_stock">Solo Agotados</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="status-message" class="hidden p-3 mb-6 rounded-xl text-center text-sm font-bold shadow-sm border"></div>
+        <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+    </div>
+
+    <div id="combo-bar" class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl p-6 transform translate-y-full transition-transform duration-500 z-40">
+        <div class="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-6">
+            <div class="flex items-center gap-4">
+                <div id="combo-items-preview" class="flex -space-x-3"></div>
+                <div>
+                    <h4 class="font-black text-gray-900 text-sm uppercase" id="combo-status-text">Selecciona productos</h4>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Oferta en proceso</p>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-center gap-8">
+                <div class="text-center">
+                    <p class="text-[10px] text-gray-400 font-bold uppercase mb-1">Suma Total</p>
+                    <p class="text-lg font-bold text-gray-400 line-through" id="combo-original-sum">Bs. 0.00</p>
+                </div>
+
+                <div class="bg-gray-900 p-3 px-6 rounded-2xl shadow-xl">
+                    <p class="text-[10px] text-gray-500 font-bold uppercase mb-1 text-center">Precio Oferta Combo</p>
+                    <div class="flex items-center gap-2">
+                        <span class="font-black text-white text-lg">Bs.</span>
+                        <input type="number" id="custom-combo-price" placeholder="..." class="w-28 bg-transparent border-b border-gray-700 focus:border-blue-500 outline-none font-black text-white text-2xl text-center">
+                    </div>
+                </div>
+
+                <div class="flex gap-3">
+                    <button id="open-preview-btn" class="hidden px-8 py-4 bg-blue-600 text-white text-sm font-black rounded-2xl hover:bg-blue-700 transition-all shadow-lg uppercase tracking-wider">
+                        Previsualizar Imagen
+                    </button>
+                    <button id="clear-combo" class="px-4 py-2 text-xs font-bold text-gray-400 hover:text-red-500 uppercase">Limpiar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="preview-modal" class="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] items-center justify-center p-4">
+        <div class="bg-white rounded-[32px] max-w-lg w-full overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
+            <div class="p-6 border-b flex justify-between items-center bg-gray-50">
+                <h3 class="font-black text-gray-900 uppercase">Vista Previa del Diseño</h3>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-900 p-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-8 overflow-y-auto flex-grow bg-gray-800 flex justify-center items-start">
+                <canvas id="render-canvas" width="800" height="1000"></canvas>
+            </div>
+            <div class="p-6 bg-white border-t flex flex-col gap-3">
+                <button id="download-btn" class="w-full py-4 bg-blue-600 text-white font-black rounded-2xl hover:bg-blue-700 shadow-lg uppercase tracking-wider">
+                    Descargar JPG (800x1000px)
+                </button>
+                <p class="text-[10px] text-gray-400 text-center font-bold uppercase">Calidad alta para WhatsApp / Instagram</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('csv-file');
+        const dropZone = document.getElementById('drop-zone');
+        const productGrid = document.getElementById('product-grid');
+        const statusMessage = document.getElementById('status-message');
+        const controls = document.getElementById('controls');
+        const searchInput = document.getElementById('search-input');
+        const categoryFilter = document.getElementById('category-filter');
+        const stockFilter = document.getElementById('stock-filter');
+        const comboBar = document.getElementById('combo-bar');
+        const comboOriginalSumEl = document.getElementById('combo-original-sum');
+        const comboPreview = document.getElementById('combo-items-preview');
+        const comboStatusText = document.getElementById('combo-status-text');
+        const customPriceInput = document.getElementById('custom-combo-price');
+        const openPreviewBtn = document.getElementById('open-preview-btn');
+        const previewModal = document.getElementById('preview-modal');
+        const renderCanvas = document.getElementById('render-canvas');
+        const ctx = renderCanvas.getContext('2d');
+        const closeModal = document.getElementById('close-modal');
+        const downloadBtn = document.getElementById('download-btn');
+
+        let allProducts = [];
+        let selectedCombo = [];
+
+        
+        // Al hacer clic en la zona, abrir el selector de archivos
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        // Prevenir comportamiento por defecto para permitir el "drop"
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-blue-500', 'bg-blue-50');
+        });
+
+        // Quitar estilos cuando el archivo sale de la zona
+        ['dragleave', 'dragend'].forEach(type => {
+            dropZone.addEventListener(type, () => {
+                dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+            });
+        });
+
+        // Manejar el archivo soltado
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+            
+            if (e.dataTransfer.files.length) {
+                processFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        // Manejar selección normal mediante el botón de explorador
+        fileInput.addEventListener('change', (e) => {
+            if(e.target.files.length) processFile(e.target.files[0]);
+        });
+
+        function cleanPrice(val) {
+            if (!val) return 0;
+            const cleaned = val.toString().replace(/[^\d.,]/g, '').replace(',', '.');
+            return parseFloat(cleaned) || 0;
+        }
+
+        function formatCurrency(num) {
+            return `Bs. ${new Intl.NumberFormat('es-BO', { minimumFractionDigits: 2 }).format(num)}`;
+        }
+
+        function showStatus(message, classes) {
+            statusMessage.innerText = message;
+            statusMessage.className = `p-3 mb-6 rounded-xl text-center text-sm font-bold shadow-sm border ${classes}`;
+            statusMessage.classList.remove('hidden');
+        }
+
+        function processFile(file) {
+            showStatus("Analizando inventario...", "bg-blue-50 text-blue-700 border-blue-100");
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                transformHeader: h => h.trim().toLowerCase(),
+                complete: function(results) {
+                    if (results.data && results.data.length > 0) {
+                        allProducts = results.data.map(row => {
+                            const originalPrice = cleanPrice(row.sale_price);
+                            const discountPrice = cleanPrice(row.discount_price);
+                            const isOfferValid = discountPrice > 0 && discountPrice < originalPrice;
+                            const finalPrice = isOfferValid ? discountPrice : originalPrice;
+                            return {
+                                name: (row.name || 'Sin nombre').trim(),
+                                sku: (row.sku || 'N/A').trim(),
+                                originalPrice: originalPrice, // Guardamos el original para mostrarlo tachado
+                                finalPrice: finalPrice,
+                                hasOffer: isOfferValid,
+                                stock: parseFloat(row.stock) || 0,
+                                category: (row.category || 'Sin Categoría').trim(),
+                                image: row.photo_url_1 || ''
+                            };
+                        });
+                        updateCategoryDropdown();
+                        applyFilters();
+                        controls.classList.remove('hidden');
+                        dropZone.classList.add('hidden');
+                        showStatus("Inventario cargado", "bg-green-50 text-green-700 border-green-100");
+                    }
+                }
+            });
+        }
+
+        function updateCategoryDropdown() {
+            const categories = [...new Set(allProducts.map(p => p.category))].filter(c => c).sort();
+            categoryFilter.innerHTML = '<option value="">Todas las categorías</option>';
+            categories.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat; opt.innerText = cat;
+                categoryFilter.appendChild(opt);
+            });
+        }
+
+        function applyFilters() {
+            const term = searchInput.value.toLowerCase();
+            const cat = categoryFilter.value;
+            const stockMode = stockFilter.value;
+            const filtered = allProducts.filter(p => {
+                const matchesSearch = p.name.toLowerCase().includes(term) || p.sku.toLowerCase().includes(term);
+                const matchesCat = cat === "" || p.category === cat;
+                let matchesStock = true;
+                if (stockMode === 'available') matchesStock = p.stock > 0;
+                if (stockMode === 'out_of_stock') matchesStock = p.stock <= 0;
+                return matchesSearch && matchesCat && matchesStock;
+            });
+            renderProducts(filtered);
+        }
+
+        function renderProducts(products) {
+            productGrid.innerHTML = '';
+            products.forEach(p => {
+                const isInCombo = selectedCombo.some(item => item.sku === p.sku);
+                const isAvailable = p.stock > 0;
+                const card = document.createElement('div');
+                card.className = `bg-white rounded-2xl border ${isInCombo ? 'border-blue-500 ring-4 ring-blue-50' : 'border-gray-100'} overflow-hidden shadow-sm flex flex-col group relative transition-all`;
+                card.innerHTML = `
+                    <div class="aspect-square bg-gray-50 relative p-4 flex items-center justify-center">
+                        <div class="absolute inset-0 skeleton" id="sk-${p.sku}"></div>
+                        <img src="${p.image}" loading="lazy" class="max-w-full max-h-full object-contain relative z-10" 
+                             onload="document.getElementById('sk-${p.sku}')?.remove();"
+                             onerror="this.src='https://placehold.co/400x400/f3f4f6/9ca3af?text=Sin+Imagen';">
+                        
+                        <!-- Etiquetas de Stock y Oferta -->
+                        <div class="absolute top-2 left-2 z-30">
+                            <span class="${isAvailable ? 'bg-green-600' : 'bg-red-600'} text-white text-[8px] font-black px-2 py-1 rounded-full uppercase shadow-sm">
+                                ${isAvailable ? 'Disponible' : 'Agotado'}
+                            </span>
+                        </div>
+
+                        <div class="absolute top-2 right-2 z-30">
+                             ${p.hasOffer ? `<svg class="w-7 h-7 text-red-600 animate-pulse" fill="currentColor" viewBox="0 0 24 24"><path d="m20.749 12 1.104-1.908a1 1 0 0 0-.365-1.366l-1.91-1.104v-2.2a1 1 0 0 0-1-1h-2.199l-1.103-1.909a1.008 1.008 0 0 0-.607-.466.993.993 0 0 0-.759.1L12 3.251l-1.91-1.105a1 1 0 0 0-1.366.366L7.62 4.422H5.421a1 1 0 0 0-1 1v2.199l-1.91 1.104a.998.998 0 0 0-.365 1.367L3.25 12l-1.104 1.908a1.004 1.004 0 0 0 .364 1.367l1.91 1.104v2.199a1 1 0 0 0 1 1h2.2l1.104 1.91a1.01 1.01 0 0 0 .866.5c.174 0 .347-.046.501-.135l1.908-1.104 1.91 1.104a1.001 1.001 0 0 0 1.366-.365l1.103-1.91h2.199a1 1 0 0 0 1-1v-2.199l1.91-1.104a1 1 0 0 0 .365-1.367L20.749 12zM9.499 6.99a1.5 1.5 0 1 1-.001 3.001 1.5 1.5 0 0 1 .001-3.001zm.3 9.6-1.6-1.199 6-8 1.6 1.199-6 8zm4.7.4a1.5 1.5 0 1 1 .001-3.001 1.5 1.5 0 0 1-.001 3.001z"></path></svg>` : ''}
+                        </div>
+                    </div>
+                    <div class="p-4 flex flex-col flex-grow">
+                        <h3 class="text-gray-900 font-bold text-[11px] leading-tight line-clamp-2 h-8 mb-2">${p.name}</h3>
+                        <div class="mt-auto flex items-center justify-between">
+                            <div class="flex flex-col">
+                                ${p.hasOffer ? `<span class="text-[9px] text-red-500 font-bold line-through opacity-60 mb-[-2px] decoration-red-500">${formatCurrency(p.originalPrice)}</span>` : ''}
+                                <span class="text-sm font-black text-gray-900">${formatCurrency(p.finalPrice)}</span>
+                            </div>
+                            <button onclick="toggleProduct('${p.sku}')" class="bg-blue-600 text-white p-2 rounded-xl shadow-lg hover:scale-110 active:scale-95 transition-transform">
+                                ${isInCombo ? '<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg>' : '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>'}
+                            </button>
+                        </div>
+                    </div>
+                `;
+                productGrid.appendChild(card);
+            });
+        }
+
+        window.toggleProduct = (sku) => {
+            const product = allProducts.find(p => p.sku === sku);
+            const index = selectedCombo.findIndex(p => p.sku === sku);
+            if (index > -1) selectedCombo.splice(index, 1);
+            else if (selectedCombo.length < 2) selectedCombo.push(product);
+            updateComboUI();
+            applyFilters();
+        };
+
+        function updateComboUI() {
+            if (selectedCombo.length > 0) comboBar.classList.remove('translate-y-full');
+            else comboBar.classList.add('translate-y-full');
+
+            comboPreview.innerHTML = '';
+            let total = 0;
+            selectedCombo.forEach(p => {
+                total += p.finalPrice;
+                const div = document.createElement('div');
+                div.className = "w-10 h-10 bg-white rounded-lg border border-gray-200 p-1 flex items-center justify-center overflow-hidden";
+                div.innerHTML = `<img src="${p.image}" class="max-w-full max-h-full object-contain">`;
+                comboPreview.appendChild(div);
+            });
+
+            comboOriginalSumEl.innerText = formatCurrency(total);
+            if (selectedCombo.length === 2) {
+                comboStatusText.innerText = "¡Combo listo!";
+                openPreviewBtn.classList.remove('hidden');
+            } else {
+                comboStatusText.innerText = `Faltan ${2 - selectedCombo.length} productos`;
+                openPreviewBtn.classList.add('hidden');
+            }
+        }
+
+        async function drawCombo() {
+            showStatus("Generando previsualización...", "bg-orange-50 text-orange-600 border-orange-100");
+            
+            ctx.fillStyle = "#FFFFFF";
+            ctx.fillRect(0, 0, 800, 1000);
+
+            // Cabecera Principal
+            ctx.fillStyle = "#111827";
+            ctx.font = "italic 900 65px Inter";
+            ctx.textAlign = "center";
+            ctx.fillText("OFERTA ESPECIAL", 400, 100);
+            
+            ctx.fillStyle = "#2563EB";
+            ctx.fillRect(320, 120, 160, 8);
+
+            const drawImageArea = async (p, x, y) => {
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    img.crossOrigin = "anonymous";
+                    img.onload = () => {
+                        const size = 340;
+                        const ratio = Math.min(size / img.width, size / img.height);
+                        const nw = img.width * ratio;
+                        const nh = img.height * ratio;
+                        ctx.drawImage(img, x + (size - nw) / 2, y + (size - nh) / 2, nw, nh);
+                        resolve();
+                    };
+                    img.onerror = () => {
+                        ctx.fillStyle = "#f3f4f6";
+                        ctx.fillRect(x, y, 340, 340);
+                        resolve();
+                    };
+                    img.src = p.image || 'https://placehold.co/400x400/f3f4f6/9ca3af?text=Sin+Imagen';
+                });
+            };
+
+            await Promise.all([
+                drawImageArea(selectedCombo[0], 40, 180),
+                drawImageArea(selectedCombo[1], 420, 180)
+            ]);
+
+            // Símbolo Plus Centrado
+            ctx.beginPath();
+            ctx.arc(400, 350, 45, 0, Math.PI * 2);
+            ctx.fillStyle = "#2563EB";
+            ctx.fill();
+            ctx.fillStyle = "#FFFFFF";
+            ctx.font = "bold 60px Inter";
+            ctx.fillText("+", 400, 372);
+
+            const drawProductDetails = (p, x, y) => {
+                ctx.textAlign = "center";
+                ctx.fillStyle = "#2563EB";
+                ctx.font = "italic 900 32px Inter";
+                ctx.fillText(`SKU: ${p.sku}`, x, y);
+
+                ctx.fillStyle = "#374151";
+                ctx.font = "bold 22px Inter";
+                wrapText(ctx, p.name, x, y + 45, 340, 28);
+
+                ctx.fillStyle = "#111827";
+                ctx.font = "900 38px Inter";
+                ctx.fillText(formatCurrency(p.finalPrice), x, y + 130);
+            };
+
+            drawProductDetails(selectedCombo[0], 210, 580);
+            drawProductDetails(selectedCombo[1], 590, 580);
+
+            const customPrice = cleanPrice(customPriceInput.value);
+            const originalSum = selectedCombo.reduce((acc, p) => acc + p.finalPrice, 0);
+            const finalPrice = customPrice > 0 ? customPrice : originalSum;
+
+            if (customPrice > 0) {
+                ctx.fillStyle = "#9ca3af";
+                ctx.font = "bold 28px Inter";
+                const label = `TOTAL: ${formatCurrency(originalSum)}`;
+                ctx.fillText(label, 400, 800);
+                
+                const textWidth = ctx.measureText(label).width;
+                ctx.strokeStyle = "#EF4444";
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(400 - textWidth / 2, 790);
+                ctx.lineTo(400 + textWidth / 2, 790);
+                ctx.stroke();
+            }
+
+            ctx.fillStyle = "#2563EB";
+            ctx.font = "900 20px Inter"; // Cambiado a 900 para mayor peso
+            ctx.fillText("DESCUENTO EN COMBO", 400, 855); // Texto actualizado
+
+            // Caja para el Precio Final
+            ctx.fillStyle = "#f9fafb";
+            const boxY = 875;
+            const boxHeight = 100;
+            roundRect(ctx, 80, boxY, 640, boxHeight, 50, true, true);
+            
+            ctx.fillStyle = "#111827";
+            ctx.font = "900 65px Inter"; // Tamaño mediano mantenido
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(formatCurrency(finalPrice), 400, boxY + (boxHeight / 2));
+            
+            ctx.textBaseline = "alphabetic";
+
+            previewModal.classList.add('active');
+            showStatus("Diseño listo", "bg-green-50 text-green-700 border-green-100");
+        }
+
+        function wrapText(context, text, x, y, maxWidth, lineHeight) {
+            const words = text.split(' ');
+            let line = '';
+            let lineCount = 0;
+            for(let n = 0; n < words.length; n++) {
+                if (lineCount >= 2) break;
+                let testLine = line + words[n] + ' ';
+                let metrics = context.measureText(testLine);
+                if (metrics.width > maxWidth && n > 0) {
+                    context.fillText(line, x, y);
+                    line = words[n] + ' ';
+                    y += lineHeight;
+                    lineCount++;
+                } else { line = testLine; }
+            }
+            if (lineCount < 2) context.fillText(line, x, y);
+        }
+
+        function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+            if (fill) ctx.fill();
+            if (stroke) { ctx.strokeStyle = "#E5E7EB"; ctx.lineWidth = 2; ctx.stroke(); }
+        }
+
+        openPreviewBtn.addEventListener('click', drawCombo);
+        closeModal.addEventListener('click', () => previewModal.classList.remove('active'));
+        downloadBtn.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = `Combo_${selectedCombo[0].sku}_${selectedCombo[1].sku}.jpg`;
+            link.href = renderCanvas.toDataURL('image/jpeg', 0.95);
+            link.click();
+        });
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => { if(e.target.files.length) processFile(e.target.files[0]); });
+        searchInput.addEventListener('input', applyFilters);
+        categoryFilter.addEventListener('change', applyFilters);
+        stockFilter.addEventListener('change', applyFilters);
+        document.getElementById('clear-combo').addEventListener('click', () => {
+            selectedCombo = [];
+            customPriceInput.value = '';
+            updateComboUI();
+            applyFilters();
+        });
+    </script>
+</body>
+</html>
