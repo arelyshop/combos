@@ -154,7 +154,6 @@
         const comboPreview = document.getElementById('combo-items-preview');
         const manualCatalogPreview = document.getElementById('manual-catalog-preview');
         const catalogCountText = document.getElementById('catalog-count-text');
-        const comboStatusText = document.getElementById('combo-status-text');
         const comboSumDisplay = document.getElementById('combo-sum-display');
         const customPriceInput = document.getElementById('custom-combo-price');
         const openPreviewBtn = document.getElementById('open-preview-btn');
@@ -289,7 +288,7 @@
                         <h3 class="text-gray-900 font-bold text-[12px] leading-tight line-clamp-2 h-10 mb-4">${p.name}</h3>
                         <div class="mt-auto">
                              <div class="mb-4">
-                                ${p.hasOffer ? `<span class="text-[10px] text-red-500 font-black line-through opacity-50">${formatCurrency(p.originalPrice)}</span>` : ''}
+                                ${p.hasOffer ? `<span class="text-[10px] text-red-500 font-black line-through opacity-50 decoration-red-500">${formatCurrency(p.originalPrice)}</span>` : ''}
                                 <div class="text-2xl font-black text-gray-900 leading-none">${formatCurrency(p.finalPrice)}</div>
                              </div>
                              <div class="grid grid-cols-2 gap-3">
@@ -412,7 +411,23 @@
                 ctx.textAlign = "center";
                 ctx.fillStyle = "#2563EB"; ctx.font = "italic 900 38px Inter"; ctx.fillText(`SKU: ${p.sku}`, x + sz/2, y + 540);
                 ctx.fillStyle = "#374151"; ctx.font = "bold 28px Inter"; wrapText(ctx, p.name, x + sz/2, y + 600, sz, 36);
-                ctx.fillStyle = "#111827"; ctx.font = "900 58px Inter"; ctx.fillText(formatCurrency(p.finalPrice), x + sz/2, y + 710);
+                
+                if (p.hasOffer) {
+                    // Precio original tachado (Reducido de 32px a 28px)
+                    ctx.fillStyle = "#9ca3af"; ctx.font = "bold 28px Inter";
+                    const oldTxt = formatCurrency(p.originalPrice);
+                    ctx.fillText(oldTxt, x + sz/2, y + 660);
+                    const tw = ctx.measureText(oldTxt).width;
+                    ctx.strokeStyle = "#EF4444"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + sz/2 - tw/2 - 5, y + 652); ctx.lineTo(x + sz/2 + tw/2 + 5, y + 652); ctx.stroke();
+                    
+                    // Precio oferta (Reducido de 58px a 48px para evitar amontonamiento)
+                    ctx.fillStyle = "#EF4444"; ctx.font = "900 48px Inter";
+                    ctx.fillText(formatCurrency(p.finalPrice), x + sz/2, y + 715);
+                } else {
+                    // Precio normal (Reducido de 58px a 48px)
+                    ctx.fillStyle = "#111827"; ctx.font = "900 48px Inter"; 
+                    ctx.fillText(formatCurrency(p.finalPrice), x + sz/2, y + 710);
+                }
             };
 
             drawP(selectedCombo[0], img1, 15, 220);
@@ -433,6 +448,8 @@
 
             ctx.fillStyle = "#2563EB"; ctx.font = "900 32px Inter"; ctx.fillText("DESCUENTO EN COMBO", 500, 1045);
             ctx.fillStyle = "#f9fafb"; ctx.beginPath(); ctx.roundRect(100, 1065, 800, 110, 30); ctx.fill(); ctx.strokeStyle = "#E5E7EB"; ctx.stroke();
+            
+            // Precio de combo mediano centrado
             ctx.fillStyle = "#111827"; ctx.font = "900 65px Inter"; ctx.textBaseline = "middle";
             ctx.fillText(formatCurrency(cp > 0 ? cp : sumO), 500, 1120);
             ctx.textBaseline = "alphabetic";
@@ -444,7 +461,7 @@
             const list = selectedCatalog.length > 0 ? selectedCatalog : filteredProducts;
             if (list.length === 0) return alert("No hay productos seleccionados para exportar.");
 
-            const rH = 680; const hH = 220; const fH = 120;
+            const rH = 750; const hH = 220; const fH = 120;
             const rows = Math.ceil(list.length / 2);
             renderCanvas.width = 1000; renderCanvas.height = hH + (rows * rH) + fH;
             ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, 1000, renderCanvas.height);
@@ -466,7 +483,17 @@
                 ctx.textAlign = "center";
                 ctx.fillStyle = "#2563EB"; ctx.font = "italic 900 34px Inter"; ctx.fillText(`SKU: ${p.sku}`, xC, y + 530);
                 ctx.fillStyle = "#111827"; ctx.font = "bold 26px Inter"; wrapText(ctx, p.name, xC, y + 575, 460, 34);
-                ctx.font = "900 52px Inter"; ctx.fillText(formatCurrency(p.finalPrice), xC, y + 655);
+                
+                if (p.hasOffer) {
+                    ctx.fillStyle = "#9ca3af"; ctx.font = "bold 28px Inter";
+                    const oldT = formatCurrency(p.originalPrice);
+                    ctx.fillText(oldT, xC, y + 640);
+                    const tw = ctx.measureText(oldT).width;
+                    ctx.strokeStyle = "#EF4444"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(xC - tw/2 - 5, y + 632); ctx.lineTo(xC + tw/2 + 5, y + 632); ctx.stroke();
+                    ctx.fillStyle = "#EF4444"; ctx.font = "900 52px Inter"; ctx.fillText(formatCurrency(p.finalPrice), xC, y + 695);
+                } else {
+                    ctx.fillStyle = "#111827"; ctx.font = "900 52px Inter"; ctx.fillText(formatCurrency(p.finalPrice), xC, y + 665);
+                }
             }
 
             ctx.fillStyle = "#F9FAFB"; ctx.fillRect(0, renderCanvas.height - fH, 1000, fH);
